@@ -30,5 +30,36 @@ public class ContentsSchedulerService {
         return calculateTotalPages(totalResults, maxResults);
     }
 
+    public void fetchBooksForAllPages(int maxResults) throws JsonProcessingException {
+
+        Instant start = Instant.now();
+
+        int totalPages = checkTotalPages(maxResults);
+        System.out.println("totalPages = " + totalPages);
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        for (int page = 1; page <= totalPages; page++) {
+            String pageResponse = bookApiClient.fetchBooksByPage(page, maxResults);
+            JsonNode items = objectMapper.readTree(pageResponse).path("item");
+
+            List<Contents> contentsList = AladinUtils.parseContentsData(items, "Book");
+            saveContentsToDatabase(contentsList);
+        }
+
+        Instant end = Instant.now();
+        Duration timeElapsed = Duration.between(start, end);
+        System.out.println("Execution time: " +  timeElapsed.toSeconds() + " seconds");
+    }
+
+    private void saveContentsToDatabase(List<Contents> contentsList) {
+        List<String> existingTitlesAndWriters = contentsRepository.findAllTitlesAndWriters();
+
+        List<Contents> newContents = contentsList.stream()
+                .filter(content -> !existingTitlesAndWriters.contains(content.getTitle() + "|" + content.getWriter()))
+                .toList();
+
+        contentsRepository.saveAll(newContents);
+    }
+
 
 }
